@@ -1,110 +1,54 @@
-import boto3
-from supabase import create_client, Client
-import os
-
-from typing import List
-from pydantic import BaseModel
-
-import uvicorn  # for fastapi
 from fastapi import FastAPI, UploadFile
-
-# --- Supabase connection ---
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# --- MinIO (running on Fly.io) ---
-MINIO_URL = os.environ.get("MINIO_URL", "http://minio:9000")
-MINIO_ACCESS_KEY = os.environ.get("MINIO_ACCESS_KEY", "minio")
-MINIO_SECRET_KEY = os.environ.get("MINIO_SECRET_KEY", "123456789")
-MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "photos")
-
-s3 = boto3.client(
-    "s3",
-    endpoint_url=MINIO_URL,
-    aws_access_key_id=MINIO_ACCESS_KEY,
-    aws_secret_access_key=MINIO_SECRET_KEY,
-    region_name="us-east-1"  # dummy, not used by MinIO
-)
-
-# Ensure bucket exists
-try:
-    s3.create_bucket(Bucket=MINIO_BUCKET)
-except Exception:
-    pass
-
-
-class PhotoModel(BaseModel):
-    id: int
-    photo_name: str
-    photo_url: str
-    is_deleted: bool
-
+from fastapi.responses import JSONResponse
+import requests
+import os
 
 app = FastAPI(debug=True)
 
+# -----------------------------
+# Config: Your ML pipeline URL (via ngrok)
+# -----------------------------
+ML_PIPELINE_URL = os.environ.get("ML_PIPELINE_URL", "http://<your-ngrok-url>.ngrok.io/predict")
 
-@app.get("/status")
-async def check_status():
+# -----------------------------
+# Dummy image generation endpoint
+# -----------------------------
+@app.get("/generate")
+async def generate_images(count: int = 10):
     return "ok"
+    """Generate dummy images (for frontend demo)"""
+    import base64, io
+    from PIL import Image
+    import random
 
-
-@app.get("/photos", response_model=List[PhotoModel])
-async def get_all_photos():
-    # Fetch from Supabase table "photo"
-    try:
-        response = supabase.table("photo").select("*").order("id", desc=True).execute()
-        rows = response.data
-    except Exception as e:
-        return {"error": f"Supabase fetch failed: {str(e)}"}
-
-    formatted_photos = []
-    for row in rows:
-        formatted_photos.append(
-            PhotoModel(
-                id=row["id"],
-                photo_name=row["photo_name"],
-                photo_url=row["photo_url"],
-                is_deleted=row["is_deleted"],
-            )
+    images = []
+    for i in range(count):
+        img = Image.new(
+            "RGB",
+            (128, 128),
+            color=(random.randint(0,255), random.randint(0,255), random.randint(0,255))
         )
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        img_bytes = buf.getvalue()
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+        images.append({"name": f"image_{i}.png", "data": img_b64})
 
-    return formatted_photos
+    return JSONResponse(content={"images": images})
 
-
-@app.post("/photos", status_code=201)
-async def add_photo(file: UploadFile):
-    # Upload to MinIO
+# -----------------------------
+# Forward file to your ML pipeline
+# -----------------------------
+@app.post("/ml-predict")
+async def ml_predict(file: UploadFile):
+    return "ok"
     try:
-        s3.upload_fileobj(file.file, MINIO_BUCKET, file.filename)
+        files = {"file": (file.filename, file.file, file.content_type)}
+        resp = requests.post(ML_PIPELINE_URL, files=files, timeout=20)
+        return JSONResponse(content=resp.json())
     except Exception as e:
-        return {"error": f"Upload to MinIO failed: {str(e)}"}
-
-    # Public link (Fly.io MinIO URL + bucket + file)
-    photo_url = f"{MINIO_URL}/{MINIO_BUCKET}/{file.filename}"
-
-    # Insert metadata into Supabase
-    try:
-        response = supabase.table("photo").insert(
-            {
-                "photo_name": file.filename,
-                "photo_url": photo_url,
-                "is_deleted": False,
-            }
-        ).execute()
-
-        new_row = response.data[0]
-    except Exception as e:
-        return {"error": f"Supabase insert failed: {str(e)}"}
-
-    return {
-        "id": new_row["id"],
-        "photo_name": new_row["photo_name"],
-        "photo_url": new_row["photo_url"],
-        "is_deleted": new_row["is_deleted"],
-    }
-
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
