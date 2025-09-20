@@ -5,3 +5,4 @@ opencv-python==4.11.0.86
 numpy==1.26.4
 matplotlib==3.10.6
 Pillow==11.3.0
+Flask==2.3.3
