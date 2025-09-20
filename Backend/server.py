@@ -17,7 +17,7 @@ app.add_middleware(
 # -----------------------------
 # Config: Your ML pipeline URL (via ngrok)
 # -----------------------------
-ML_PIPELINE_URL = "http://localhost:5000/predict"
+ML_PIPELINE_URL = "http://ml-pipeline:5000/predict"
 
 # -----------------------------
 # Dummy image generation endpoint
