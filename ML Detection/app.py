@@ -14,35 +14,38 @@ class_names = ["Kolam", "Rangoli"]
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    if 'image' not in request.files:
-        return jsonify({'error': 'No image uploaded'}), 400
-    
-    file = request.files['image']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image uploaded'}), 400
 
-    # Save uploaded image
-    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(filepath)
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
 
-    # Run prediction and save annotated image
-    results = model.predict(source=filepath, save=True)
+        # Save uploaded image
+        filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filepath)
 
-    # Build prediction JSON
-    predictions = []
-    for r in results:
-        if r.boxes is not None and len(r.boxes) > 0:
-            xyxy_list = r.boxes.xyxy.tolist()
-            conf_list = r.boxes.conf.tolist()
-            cls_list = r.boxes.cls.tolist()
-            for box, conf, cls in zip(xyxy_list, conf_list, cls_list):
-                predictions.append({
-                    'bbox': [float(x) for x in box],  # convert all coordinates to float
-                    'confidence': float(conf),
-                    'label': class_names[int(cls)]
-                })
+        # Run prediction and save annotated image
+        results = model.predict(source=filepath, save=True)
 
-    return jsonify({'predictions': predictions})
+        predictions = []
+        for r in results:
+            if hasattr(r, "boxes") and r.boxes is not None and len(r.boxes) > 0:
+                xyxy_list = r.boxes.xyxy.tolist()
+                conf_list = r.boxes.conf.tolist()
+                cls_list = r.boxes.cls.tolist()
+                for box, conf, cls in zip(xyxy_list, conf_list, cls_list):
+                    predictions.append({
+                        'bbox': [float(x) for x in box],
+                        'confidence': float(conf),
+                        'label': class_names[int(cls)]
+                    })
+
+        return jsonify({'predictions': predictions})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 
