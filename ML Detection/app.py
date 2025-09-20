@@ -3,7 +3,7 @@ from ultralytics import YOLO
 import os
 
 app = Flask(__name__)
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = '/data'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # Load YOLO model
