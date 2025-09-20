@@ -17,7 +17,7 @@ app.add_middleware(
 # -----------------------------
 # Config: Your ML pipeline URL (via ngrok)
 # -----------------------------
-ML_PIPELINE_URL = os.environ.get("ML_PIPELINE_URL", "http://<your-ngrok-url>.ngrok.io/predict")
+ML_PIPELINE_URL = "http://localhost:5000/predict"
 
 # -----------------------------
 # Dummy image generation endpoint
@@ -50,9 +50,8 @@ async def generate_images(count: int = 10):
 # -----------------------------
 @app.post("/ml-predict")
 async def ml_predict(file: UploadFile):
-    return "ok"
     try:
-        files = {"file": (file.filename, file.file, file.content_type)}
+        files = {"image": (file.filename, file.file, file.content_type)}
         resp = requests.post(ML_PIPELINE_URL, files=files, timeout=20)
         return JSONResponse(content=resp.json())
     except Exception as e:
